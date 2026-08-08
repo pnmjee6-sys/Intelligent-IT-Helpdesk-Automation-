@@ -2,16 +2,10 @@ import React, { useState } from 'react';
 import { AppSettings } from '../types';
 import { motion } from 'motion/react';
 import { 
-  Cog6ToothIcon, 
   CpuChipIcon, 
-  ShieldCheckIcon, 
-  BellIcon, 
-  BoltIcon, 
-  AdjustmentsHorizontalIcon, 
   CheckCircleIcon, 
   LockClosedIcon, 
-  ShareIcon,
-  BookmarkIcon
+  ShareIcon
 } from '@heroicons/react/24/outline';
 
 interface SettingsPageProps {

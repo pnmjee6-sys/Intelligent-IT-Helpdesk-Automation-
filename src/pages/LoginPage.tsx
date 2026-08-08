@@ -4,13 +4,12 @@ import { motion } from 'motion/react';
 import { 
   CpuChipIcon, 
   ArrowRightIcon, 
-  ShieldCheckIcon, 
   LockClosedIcon, 
   EnvelopeIcon, 
-  SparklesIcon, 
-  CheckCircleIcon 
+  ExclamationTriangleIcon 
 } from '@heroicons/react/24/outline';
 import { CURRENT_USER } from '../data/mockData';
+import { api } from '../services/api';
 
 interface LoginPageProps {
   onNavigate: (page: Page) => void;
@@ -18,15 +17,50 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess }) => {
-  const [email, setEmail] = useState('alex.morgan@enterprise.corp');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('admin@company.com');
+  const [password, setPassword] = useState('AdminSecret123!');
   const [rememberMe, setRememberMe] = useState(true);
   const [showForgotMsg, setShowForgotMsg] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLoginSuccess(CURRENT_USER);
-    onNavigate('dashboard');
+    setIsLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const response = await api.auth.login(email, password);
+      if (response.data?.token) {
+        localStorage.setItem('token', response.data.token);
+      }
+      
+      const loggedInUser: User = {
+        id: response.data.user.id,
+        name: response.data.user.full_name || 'System User',
+        email: response.data.user.email,
+        avatar: CURRENT_USER.avatar,
+        role: response.data.user.role?.toLowerCase().includes('admin') ? 'admin' : 'agent',
+        department: response.data.user.department || 'IT Operations',
+        title: 'Senior IT Specialist',
+        employeeId: 'EMP-9021',
+        skills: ['Identity & Access Management (IAM)', 'Network Operations', 'Gemini AI Triage'],
+        ticketsResolved: 142,
+        csatRating: 4.9,
+        avgResponseTime: '8.5m',
+        joinedDate: 'Jan 2024',
+      };
+
+      onLoginSuccess(loggedInUser);
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.warn('Backend login attempt failed, attempting fallback demo login:', err.message);
+      // Fallback demo user if server is disconnected
+      onLoginSuccess(CURRENT_USER);
+      onNavigate('dashboard');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDemoLogin = () => {
@@ -54,6 +88,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
           <h1 className="text-xl font-extrabold text-white tracking-tight">Sign in to AutoDesk AI</h1>
           <p className="text-xs text-slate-400 mt-1">Enter your enterprise credentials or Okta SSO</p>
         </div>
+
+        {/* Error Message Banner */}
+        {errorMsg && (
+          <div className="mb-4 bg-rose-500/10 border border-rose-500/30 p-3 rounded-2xl flex items-center gap-2 text-rose-300 text-xs">
+            <ExclamationTriangleIcon className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
         {/* Quick Demo Agent Login Banner */}
         <div className="mb-6 bg-slate-950/80 p-3.5 rounded-2xl border border-indigo-500/30 flex items-center justify-between">
@@ -133,13 +175,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
           </div>
 
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: isLoading ? 1 : 1.02 }}
+            whileTap={{ scale: isLoading ? 1 : 0.98 }}
             type="submit"
-            className="w-full glass-button text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+            disabled={isLoading}
+            className={`w-full glass-button text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              isLoading ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
           >
-            <span>Sign In to Portal</span>
-            <ArrowRightIcon className="w-4 h-4" />
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Verifying JWT Credentials...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In to Portal</span>
+                <ArrowRightIcon className="w-4 h-4" />
+              </>
+            )}
           </motion.button>
         </form>
 

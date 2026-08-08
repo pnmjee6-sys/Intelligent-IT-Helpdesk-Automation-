@@ -3,9 +3,13 @@ import { IntegrationController } from '../controllers/integration.controller.js'
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { rbacMiddleware } from '../middlewares/rbacMiddleware.js';
 import { validate } from '../middlewares/validate.js';
+import { workflowLimiter } from '../middlewares/rateLimiter.js';
 import { oktaResetPasswordSchema, webhookSchema } from '../validators/integration.schema.js';
 
 const router = Router();
+
+// Apply workflow rate limiter to integrations/workflows
+router.use(workflowLimiter);
 
 // POST /api/v1/integrations/webhooks - External webhook ingestion
 router.post('/webhooks', validate(webhookSchema), IntegrationController.handleWebhook);

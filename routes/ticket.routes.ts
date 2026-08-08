@@ -3,6 +3,7 @@ import { TicketController } from '../controllers/ticket.controller.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { rbacMiddleware } from '../middlewares/rbacMiddleware.js';
 import { validate } from '../middlewares/validate.js';
+import { ticketIngestionLimiter } from '../middlewares/rateLimiter.js';
 import {
   createTicketSchema,
   updateTicketSchema,
@@ -22,9 +23,10 @@ router.get(
   TicketController.getTickets
 );
 
-// POST /api/v1/tickets - Create new ticket (triggers async AI triage pipeline)
+// POST /api/v1/tickets - Create new ticket (Rate-limited & validated)
 router.post(
   '/',
+  ticketIngestionLimiter,
   rbacMiddleware(['END_USER', 'L1_AGENT', 'L2_AGENT', 'HELPDESK_MANAGER', 'SYS_ADMIN']),
   validate(createTicketSchema),
   TicketController.createTicket

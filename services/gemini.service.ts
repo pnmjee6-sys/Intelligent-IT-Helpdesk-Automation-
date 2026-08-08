@@ -76,7 +76,48 @@ Description: ${description}`;
           };
         }
       } catch (err) {
-        console.warn('[GeminiService] Gemini API call error, falling back to heuristic engine:', err);
+        // Retry with gemini-1.5-flash if gemini-2.5-flash is not available in region
+        try {
+          const prompt = `You are an enterprise IT Helpdesk AI Triage Engine using Gemini models.
+Analyze the following helpdesk ticket and output ONLY valid JSON matching this schema:
+{
+  "category": "Category name",
+  "priority": "LOW/MEDIUM/HIGH/URGENT",
+  "urgencyScore": 60,
+  "sentiment": "neutral",
+  "confidence": 0.92,
+  "assignedQueue": "Tier 1 Support Queue",
+  "slaMinutes": 120,
+  "matchedKB": [],
+  "draftResolution": "Suggested resolution text",
+  "autoResolutionEligible": false
+}
+
+Subject: ${subject}
+Description: ${description}`;
+          const response = await ai.models.generateContent({
+            model: 'gemini-1.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json' },
+          });
+          if (response.text) {
+            const parsed = JSON.parse(response.text);
+            return {
+              category: parsed.category || 'General IT Support',
+              priority: (parsed.priority?.toUpperCase() as any) || 'MEDIUM',
+              urgencyScore: parseInt(parsed.urgencyScore, 10) || 60,
+              sentiment: parsed.sentiment || 'neutral',
+              confidence: parsed.confidence || 0.92,
+              assignedQueue: parsed.assignedQueue || 'Tier 1 Support Queue',
+              slaMinutes: parsed.slaMinutes || 120,
+              matchedKB: parsed.matchedKB || [],
+              draftResolution: parsed.draftResolution || 'Ticket received.',
+              autoResolutionEligible: parsed.autoResolutionEligible ?? false,
+            };
+          }
+        } catch (retryErr) {
+          console.warn('[GeminiService] Gemini API model fallback to heuristic engine:', retryErr);
+        }
       }
     }
 

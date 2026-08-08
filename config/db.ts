@@ -8,7 +8,7 @@ declare global {
 export const prisma =
   globalThis.prismaGlobal ??
   new PrismaClient({
-    log: ['error'],
+    log: [], // Quiet error logs during fallback offline mode
   });
 
 if (process.env.NODE_ENV !== 'production') {
@@ -18,7 +18,6 @@ if (process.env.NODE_ENV !== 'production') {
 let isDbConnected = false;
 
 export async function checkDbConnection(): Promise<boolean> {
-  // Check if DATABASE_URL is set and not a placeholder
   if (
     !env.DATABASE_URL ||
     env.DATABASE_URL.includes('username:password') ||

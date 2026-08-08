@@ -5,15 +5,11 @@ import {
   XMarkIcon, 
   PaperAirplaneIcon, 
   BoltIcon, 
-  CpuChipIcon, 
-  MagnifyingGlassIcon, 
-  ExclamationCircleIcon, 
-  CheckCircleIcon, 
-  ClockIcon, 
   SparklesIcon,
-  ExclamationTriangleIcon,
-  BookOpenIcon
+  BookOpenIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
+import { api } from '../services/api';
 
 interface CreateTicketModalProps {
   isOpen: boolean;
@@ -32,6 +28,8 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
   const [department, setDepartment] = useState(currentUser.department || 'Software Engineering');
   const [description, setDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Live Simulated AI Triage Preview State
   const [aiPreview, setAiPreview] = useState<{
@@ -105,9 +103,12 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim() || !description.trim()) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
 
     const newTicket: Ticket = {
       id: `TCK-${Math.floor(8500 + Math.random() * 1000)}`,
@@ -156,11 +157,24 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
       ]
     };
 
-    onSubmit(newTicket);
-    setSubject('');
-    setDescription('');
-    setAiPreview(null);
-    onClose();
+    try {
+      // Connect to backend API
+      await api.tickets.create({
+        title: subject,
+        description,
+        category_id: aiPreview?.category,
+        priority: aiPreview?.priority?.toUpperCase(),
+      });
+    } catch (err: any) {
+      console.warn('Backend ticket creation error, persisting in local state:', err.message);
+    } finally {
+      onSubmit(newTicket);
+      setSubject('');
+      setDescription('');
+      setAiPreview(null);
+      setIsSubmitting(false);
+      onClose();
+    }
   };
 
   return (
@@ -192,6 +206,14 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
               <XMarkIcon className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Error Banner */}
+          {errorMsg && (
+            <div className="mx-6 mt-4 bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl flex items-center gap-2 text-rose-300 text-xs">
+              <ExclamationTriangleIcon className="w-4 h-4 text-rose-400" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
 
           {/* Form Body */}
           <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
@@ -304,13 +326,28 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
                 Cancel
               </button>
               <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
+                whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
                 type="submit"
-                className="glass-button text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+                disabled={isSubmitting}
+                className={`glass-button text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                  isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
               >
-                <PaperAirplaneIcon className="w-4 h-4" />
-                <span>Submit Ticket</span>
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Dispatching Ticket & AI Triage...</span>
+                  </>
+                ) : (
+                  <>
+                    <PaperAirplaneIcon className="w-4 h-4" />
+                    <span>Submit Ticket</span>
+                  </>
+                )}
               </motion.button>
             </div>
           </form>

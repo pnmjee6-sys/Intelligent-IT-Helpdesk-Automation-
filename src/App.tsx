@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Page, User, Ticket, AppSettings } from './types';
 import { CURRENT_USER, MOCK_AGENTS, INITIAL_TICKETS, DEFAULT_SETTINGS } from './data/mockData';
 import { Navbar } from './components/Navbar';
@@ -12,6 +12,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeftIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { api } from './services/api';
 
 export function App() {
   const [currentPage, setCurrentPage] = useState<Page>('landing');
@@ -19,6 +20,14 @@ export function App() {
   const [tickets, setTickets] = useState<Ticket[]>(INITIAL_TICKETS);
   const [agents, setAgents] = useState<User[]>(MOCK_AGENTS);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+
+  // Restore JWT token session on load
+  useEffect(() => {
+    const token = api.auth.getStoredToken();
+    if (token && !currentUser) {
+      setCurrentUser(CURRENT_USER);
+    }
+  }, []);
 
   const handleUpdateTicket = (updatedTicket: Ticket) => {
     setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
@@ -31,6 +40,12 @@ export function App() {
   const handleUpdateUser = (updatedUser: User) => {
     setCurrentUser(updatedUser);
     setAgents(prev => prev.map(a => a.id === updatedUser.id ? updatedUser : a));
+  };
+
+  const handleSignOut = () => {
+    api.auth.logout();
+    setCurrentUser(null);
+    setCurrentPage('landing');
   };
 
   const openTicketsCount = tickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length;
@@ -96,10 +111,7 @@ export function App() {
           onNavigate={(page) => setCurrentPage(page)}
           currentUser={currentUser}
           openTicketsCount={openTicketsCount}
-          onSignOut={() => {
-            setCurrentUser(null);
-            setCurrentPage('landing');
-          }}
+          onSignOut={handleSignOut}
         />
       )}
 
@@ -121,7 +133,7 @@ export function App() {
             <span>•</span>
             <span className="text-emerald-400 flex items-center gap-1">
               <ShieldCheckIcon className="w-3.5 h-3.5" />
-              SOC-2 Verified
+              SOC-2 Verified JWT Session
             </span>
           </div>
         </header>

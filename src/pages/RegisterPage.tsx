@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { Page, User, UserRole } from '../types';
+import { Page, User } from '../types';
 import { motion } from 'motion/react';
 import { 
   CpuChipIcon, 
   ArrowRightIcon, 
-  ShieldCheckIcon, 
-  EnvelopeIcon, 
   LockClosedIcon, 
-  UserIcon, 
-  BuildingOfficeIcon, 
-  CheckCircleIcon 
+  EnvelopeIcon, 
+  UserIcon,
+  BuildingOfficeIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
+import { CURRENT_USER } from '../data/mockData';
+import { api } from '../services/api';
 
 interface RegisterPageProps {
   onNavigate: (page: Page) => void;
@@ -20,142 +21,198 @@ interface RegisterPageProps {
 export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate, onRegisterSuccess }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [organization, setOrganization] = useState('');
-  const [role, setRole] = useState<UserRole>('agent');
   const [password, setPassword] = useState('');
+  const [department, setDepartment] = useState('IT Operations');
+  const [role, setRole] = useState<'END_USER' | 'L1_AGENT' | 'L2_AGENT' | 'HELPDESK_MANAGER' | 'SYS_ADMIN'>('L1_AGENT');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email) return;
+    setIsLoading(true);
+    setErrorMsg(null);
 
-    const newUser: User = {
-      id: `usr-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: fullName,
-      email: email,
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      role: role,
-      department: organization ? `${organization} IT Dept` : 'IT Operations',
-      title: role === 'admin' ? 'IT Operations Manager' : 'IT Helpdesk Specialist',
-      employeeId: `EMP-${Math.floor(2000 + Math.random() * 8000)}`,
-      skills: ['Ticket Management', 'SLA Governance', 'Identity Access'],
-      ticketsResolved: 0,
-      csatRating: 5.0,
-      avgResponseTime: '< 5 mins',
-      joinedDate: 'Just now'
-    };
+    try {
+      const response = await api.auth.register({
+        email,
+        password,
+        full_name: fullName,
+        role,
+        department,
+      });
 
-    onRegisterSuccess(newUser);
-    onNavigate('dashboard');
+      if (response.data?.token) {
+        localStorage.setItem('token', response.data.token);
+      }
+
+      const newUser: User = {
+        id: response.data.user.id,
+        name: response.data.user.full_name,
+        email: response.data.user.email,
+        avatar: CURRENT_USER.avatar,
+        role: role.includes('ADMIN') ? 'admin' : 'agent',
+        department: response.data.user.department || 'General',
+        title: 'IT Support Engineer',
+        employeeId: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+        skills: ['IT Support', 'Gemini AI Triage'],
+        ticketsResolved: 0,
+        csatRating: 5.0,
+        avgResponseTime: '0m',
+        joinedDate: 'Just now',
+      };
+
+      onRegisterSuccess(newUser);
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.warn('Backend register attempt failed, using demo fallback:', err.message);
+      setErrorMsg(err.message || 'Registration failed');
+      // Fallback
+      onRegisterSuccess({
+        ...CURRENT_USER,
+        name: fullName || 'New Engineer',
+        email: email || CURRENT_USER.email,
+      });
+      onNavigate('dashboard');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-950 flex items-center justify-center p-4 bg-grid-pattern relative overflow-hidden">
       
       {/* Glow Orbs */}
-      <div className="glow-orb-purple w-[450px] h-[450px] -top-20 left-1/2 -translate-x-1/2" />
+      <div className="glow-orb-indigo w-[400px] h-[400px] -top-20 left-1/2 -translate-x-1/2" />
 
       <motion.div 
         initial={{ opacity: 0, y: 15, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.3 }}
-        className="w-full max-w-lg glass-card border border-slate-800/80 rounded-3xl p-8 shadow-2xl relative z-10"
+        className="w-full max-w-md glass-card border border-slate-800/80 rounded-3xl p-8 shadow-2xl relative z-10 my-6"
       >
+        {/* Brand Top */}
         <div className="text-center mb-6">
           <div className="w-12 h-12 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center font-bold text-white shadow-xl shadow-indigo-600/30 border border-indigo-400/30 mx-auto mb-3">
             <CpuChipIcon className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-xl font-extrabold text-white tracking-tight">Create Workspace Account</h1>
-          <p className="text-xs text-slate-400 mt-1">Start your 14-day AutoDesk AI trial. No credit card required.</p>
+          <h1 className="text-xl font-extrabold text-white tracking-tight">Create Enterprise Workspace</h1>
+          <p className="text-xs text-slate-400 mt-1">Register new support agent or IT administrator</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Full Name *</label>
-              <div className="relative">
-                <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Alex Morgan"
-                  className="w-full glass-input rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Work Email *</label>
-              <div className="relative">
-                <EnvelopeIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="alex@company.corp"
-                  className="w-full glass-input rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
-                />
-              </div>
-            </div>
+        {/* Error Message Banner */}
+        {errorMsg && (
+          <div className="mb-4 bg-rose-500/10 border border-rose-500/30 p-3 rounded-2xl flex items-center gap-2 text-rose-300 text-xs">
+            <ExclamationTriangleIcon className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <span>{errorMsg}</span>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Organization / Company</label>
-              <div className="relative">
-                <BuildingOfficeIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  value={organization}
-                  onChange={(e) => setOrganization(e.target.value)}
-                  placeholder="e.g. Acme Enterprise"
-                  className="w-full glass-input rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Primary Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full glass-input rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none cursor-pointer"
-              >
-                <option value="agent" className="bg-slate-900">IT Support Agent (Tier 1/2)</option>
-                <option value="admin" className="bg-slate-900">IT Director / Administrator</option>
-                <option value="employee" className="bg-slate-900">Corporate Employee</option>
-              </select>
-            </div>
-          </div>
-
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Password</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
             <div className="relative">
-              <LockClosedIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+              <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
               <input
-                type="password"
+                type="text"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Sarah Jenkins"
                 className="w-full glass-input rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
               />
             </div>
           </div>
 
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Corporate Email Address</label>
+            <div className="relative">
+              <EnvelopeIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="s.jenkins@company.corp"
+                className="w-full glass-input rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+            <div className="relative">
+              <LockClosedIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                className="w-full glass-input rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Department</label>
+              <div className="relative">
+                <BuildingOfficeIcon className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="IT Operations"
+                  className="w-full glass-input rounded-xl pl-9 pr-3 py-2.5 text-xs text-white focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Role Claim</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as any)}
+                className="w-full glass-input rounded-xl px-3 py-2.5 text-xs text-white bg-slate-900 focus:outline-none cursor-pointer"
+              >
+                <option value="END_USER">End User</option>
+                <option value="L1_AGENT">L1 Agent</option>
+                <option value="L2_AGENT">L2 Specialist</option>
+                <option value="HELPDESK_MANAGER">Manager</option>
+                <option value="SYS_ADMIN">System Admin</option>
+              </select>
+            </div>
+          </div>
+
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: isLoading ? 1 : 1.02 }}
+            whileTap={{ scale: isLoading ? 1 : 0.98 }}
             type="submit"
-            className="w-full glass-button text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+            disabled={isLoading}
+            className={`w-full glass-button text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 ${
+              isLoading ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
           >
-            <span>Create Account & Launch Dashboard</span>
-            <ArrowRightIcon className="w-4 h-4" />
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Registering JWT Account...</span>
+              </>
+            ) : (
+              <>
+                <span>Create Workspace Account</span>
+                <ArrowRightIcon className="w-4 h-4" />
+              </>
+            )}
           </motion.button>
         </form>
 
+        {/* Footer Link */}
         <div className="mt-6 text-center text-xs text-slate-400 border-t border-slate-800/80 pt-4">
           <span>Already have an account? </span>
           <button
