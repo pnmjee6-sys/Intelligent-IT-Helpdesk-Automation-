@@ -1,4 +1,4 @@
-import { dbPool, checkDbConnection } from '../config/db.js';
+import { prisma, checkDbConnection } from '../config/db.js';
 import crypto from 'crypto';
 
 export interface UserRecord {
@@ -7,52 +7,61 @@ export interface UserRecord {
   password_hash: string;
   full_name: string;
   role: 'END_USER' | 'L1_AGENT' | 'L2_AGENT' | 'HELPDESK_MANAGER' | 'SYS_ADMIN';
-  department?: string;
-  okta_id?: string;
+  department?: string | null;
+  okta_id?: string | null;
   created_at: Date;
 }
 
-// In-memory fallback store when PostgreSQL server is offline
 const fallbackUsers: UserRecord[] = [];
 
 export class UserModel {
   static async findByEmail(email: string): Promise<UserRecord | null> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM users WHERE email = $1 LIMIT 1', [email]);
-      return res.rows[0] || null;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+      return user as any;
     }
     return fallbackUsers.find((u) => u.email.toLowerCase() === email.toLowerCase()) || null;
   }
 
   static async findById(id: string): Promise<UserRecord | null> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [id]);
-      return res.rows[0] || null;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const user = await prisma.user.findUnique({
+        where: { id },
+      });
+      return user as any;
     }
     return fallbackUsers.find((u) => u.id === id) || null;
   }
 
   static async findByOktaId(oktaId: string): Promise<UserRecord | null> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM users WHERE okta_id = $1 LIMIT 1', [oktaId]);
-      return res.rows[0] || null;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const user = await prisma.user.findUnique({
+        where: { okta_id: oktaId },
+      });
+      return user as any;
     }
     return fallbackUsers.find((u) => u.okta_id === oktaId) || null;
   }
 
   static async create(user: Omit<UserRecord, 'id' | 'created_at'>): Promise<UserRecord> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query(
-        `INSERT INTO users (email, password_hash, full_name, role, department, okta_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [user.email, user.password_hash, user.full_name, user.role, user.department || 'General', user.okta_id || null]
-      );
-      return res.rows[0];
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const newUser = await prisma.user.create({
+        data: {
+          email: user.email,
+          password_hash: user.password_hash,
+          full_name: user.full_name,
+          role: user.role as any,
+          department: user.department || 'General',
+          okta_id: user.okta_id || undefined,
+        },
+      });
+      return newUser as any;
     }
 
     const newUser: UserRecord = {

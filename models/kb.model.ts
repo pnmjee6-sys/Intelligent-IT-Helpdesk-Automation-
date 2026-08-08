@@ -1,4 +1,4 @@
-import { dbPool, checkDbConnection } from '../config/db.js';
+import { prisma, checkDbConnection } from '../config/db.js';
 import crypto from 'crypto';
 
 export interface KBArticleRecord {
@@ -31,15 +31,17 @@ export class KBModel {
     category_id?: string;
     is_published?: boolean;
   }): Promise<KBArticleRecord> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query(
-        `INSERT INTO knowledge_articles (title, content_markdown, category_id, is_published)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [data.title, data.content_markdown, data.category_id || 'General', data.is_published ?? true]
-      );
-      return res.rows[0];
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const article = await prisma.knowledgeArticle.create({
+        data: {
+          title: data.title,
+          content_markdown: data.content_markdown,
+          category_id: data.category_id || 'General',
+          is_published: data.is_published ?? true,
+        },
+      });
+      return article as any;
     }
 
     const newArticle: KBArticleRecord = {
@@ -57,14 +59,18 @@ export class KBModel {
   }
 
   static async saveEmbeddings(embeddings: Array<{ article_id: string; chunk_index: number; chunk_text: string; vector: number[] }>) {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
       for (const item of embeddings) {
         const vectorStr = `[${item.vector.join(',')}]`;
-        await dbPool.query(
-          `INSERT INTO knowledge_embeddings (article_id, chunk_index, chunk_text, embedding)
-           VALUES ($1, $2, $3, $4::vector)`,
-          [item.article_id, item.chunk_index, item.chunk_text, vectorStr]
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO knowledge_embeddings (id, article_id, chunk_index, chunk_text, embedding, created_at)
+           VALUES ($1, $2, $3, $4, $5::vector, NOW())`,
+          crypto.randomUUID(),
+          item.article_id,
+          item.chunk_index,
+          item.chunk_text,
+          vectorStr
         );
       }
       return;
@@ -83,37 +89,42 @@ export class KBModel {
   }
 
   static async findAllArticles(): Promise<KBArticleRecord[]> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM knowledge_articles ORDER BY created_at DESC');
-      return res.rows;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const articles = await prisma.knowledgeArticle.findMany({
+        orderBy: { created_at: 'desc' },
+      });
+      return articles as any;
     }
     return fallbackArticles;
   }
 
   static async findArticleById(id: string): Promise<KBArticleRecord | null> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM knowledge_articles WHERE id = $1 LIMIT 1', [id]);
-      return res.rows[0] || null;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const article = await prisma.knowledgeArticle.findUnique({
+        where: { id },
+      });
+      return article as any;
     }
     return fallbackArticles.find((a) => a.id === id) || null;
   }
 
   static async searchVectorSimilarity(queryVector: number[], limit: number = 5) {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
       const vectorStr = `[${queryVector.join(',')}]`;
-      const res = await dbPool.query(
+      const res: any = await prisma.$queryRawUnsafe(
         `SELECT ke.id, ke.article_id, ke.chunk_index, ke.chunk_text, ka.title,
                 1 - (ke.embedding <=> $1::vector) AS similarity
          FROM knowledge_embeddings ke
          JOIN knowledge_articles ka ON ke.article_id = ka.id
          ORDER BY ke.embedding <=> $1::vector
          LIMIT $2`,
-        [vectorStr, limit]
+        vectorStr,
+        limit
       );
-      return res.rows;
+      return res;
     }
 
     // Fallback simple cosine similarity in memory

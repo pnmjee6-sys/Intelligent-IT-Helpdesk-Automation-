@@ -1,37 +1,44 @@
-import pg from 'pg';
+import { PrismaClient } from '@prisma/client';
 import { env } from './env.js';
 
-const { Pool } = pg;
+declare global {
+  var prismaGlobal: PrismaClient | undefined;
+}
 
-// Initialize PostgreSQL pool with standard pg settings
-export const dbPool = new Pool({
-  connectionString: env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+export const prisma =
+  globalThis.prismaGlobal ??
+  new PrismaClient({
+    log: ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalThis.prismaGlobal = prisma;
+}
 
 let isDbConnected = false;
 
-dbPool.on('connect', () => {
-  if (!isDbConnected) {
-    console.log('[Database] PostgreSQL connection pool initialized');
-    isDbConnected = true;
-  }
-});
-
-dbPool.on('error', (err) => {
-  console.warn('[Database] Unexpected PostgreSQL pool error:', err.message);
-});
-
 export async function checkDbConnection(): Promise<boolean> {
+  // Check if DATABASE_URL is set and not a placeholder
+  if (
+    !env.DATABASE_URL ||
+    env.DATABASE_URL.includes('username:password') ||
+    env.DATABASE_URL.includes('database_name')
+  ) {
+    return false;
+  }
+
   try {
-    const client = await dbPool.connect();
-    const res = await client.query('SELECT NOW()');
-    client.release();
-    return !!res.rows[0];
-  } catch (err) {
-    console.warn('[Database] PostgreSQL connection unavailable. Safe fallback mode active.');
+    await prisma.$queryRaw`SELECT 1`;
+    if (!isDbConnected) {
+      console.log('[Prisma DB] Connected successfully to PostgreSQL database');
+      isDbConnected = true;
+    }
+    return true;
+  } catch (err: any) {
+    if (isDbConnected) {
+      console.warn('[Prisma DB] PostgreSQL connection lost. Falling back to safe mode.');
+      isDbConnected = false;
+    }
     return false;
   }
 }

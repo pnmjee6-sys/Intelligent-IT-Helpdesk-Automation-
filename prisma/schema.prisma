@@ -1,0 +1,133 @@
+// Prisma Schema for Intelligent IT Helpdesk Automation Platform
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum UserRole {
+  END_USER
+  L1_AGENT
+  L2_AGENT
+  HELPDESK_MANAGER
+  SYS_ADMIN
+}
+
+enum TicketStatus {
+  NEW
+  TRIAGED
+  IN_PROGRESS
+  PENDING_USER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  full_name     String
+  role          UserRole @default(END_USER)
+  department    String?  @default("General")
+  okta_id       String?  @unique
+  created_at    DateTime @default(now())
+
+  created_tickets  Ticket[]        @relation("TicketCreator")
+  assigned_tickets Ticket[]        @relation("TicketAgent")
+  comments         TicketComment[] @relation("CommentAuthor")
+
+  @@map("users")
+}
+
+model Ticket {
+  id                String         @id @default(uuid())
+  ticket_number     Int            @unique @default(autoincrement())
+  title             String
+  description       String         @db.Text
+  status            TicketStatus   @default(NEW)
+  priority          TicketPriority @default(MEDIUM)
+  category_id       String         @default("General IT Support")
+  creator_id        String?
+  assigned_agent_id String?
+  ai_urgency_score  Int            @default(0)
+  is_auto_resolved  Boolean        @default(false)
+  created_at        DateTime       @default(now())
+
+  creator        User?           @relation("TicketCreator", fields: [creator_id], references: [id], onDelete: SetNull)
+  assigned_agent User?           @relation("TicketAgent", fields: [assigned_agent_id], references: [id], onDelete: SetNull)
+  comments       TicketComment[]
+  ai_agent_logs  AIAgentLog[]
+
+  @@map("tickets")
+}
+
+model TicketComment {
+  id               String   @id @default(uuid())
+  ticket_id        String
+  author_id        String?
+  content          String   @db.Text
+  is_internal_note Boolean  @default(false)
+  is_ai_generated  Boolean  @default(false)
+  created_at       DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  author User?  @relation("CommentAuthor", fields: [author_id], references: [id], onDelete: SetNull)
+
+  @@map("ticket_comments")
+}
+
+model KnowledgeArticle {
+  id               String   @id @default(uuid())
+  title            String
+  content_markdown String   @db.Text
+  category_id      String   @default("General")
+  is_published     Boolean  @default(true)
+  view_count       Int      @default(0)
+  helpful_votes    Int      @default(0)
+  created_at       DateTime @default(now())
+
+  embeddings KnowledgeEmbedding[]
+
+  @@map("knowledge_articles")
+}
+
+model KnowledgeEmbedding {
+  id          String   @id @default(uuid())
+  article_id  String
+  chunk_index Int
+  chunk_text  String   @db.Text
+  embedding   Unsupported("vector(768)")?
+  created_at  DateTime @default(now())
+
+  article KnowledgeArticle @relation(fields: [article_id], references: [id], onDelete: Cascade)
+
+  @@map("knowledge_embeddings")
+}
+
+model AIAgentLog {
+  id                String   @id @default(uuid())
+  ticket_id         String?
+  action_type       String
+  model_used        String
+  prompt_tokens     Int      @default(0)
+  completion_tokens Int      @default(0)
+  latency_ms        Int      @default(0)
+  confidence_score  Decimal  @default(0.0000) @db.Decimal(5, 4)
+  created_at        DateTime @default(now())
+
+  ticket Ticket? @relation(fields: [ticket_id], references: [id], onDelete: SetNull)
+
+  @@map("ai_agent_logs")
+}

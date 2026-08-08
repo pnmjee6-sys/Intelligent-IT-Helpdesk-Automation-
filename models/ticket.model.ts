@@ -1,4 +1,4 @@
-import { dbPool, checkDbConnection } from '../config/db.js';
+import { prisma, checkDbConnection } from '../config/db.js';
 import crypto from 'crypto';
 
 export interface TicketRecord {
@@ -41,24 +41,21 @@ export class TicketModel {
     ai_urgency_score?: number;
     is_auto_resolved?: boolean;
   }): Promise<TicketRecord> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query(
-        `INSERT INTO tickets (title, description, category_id, priority, creator_id, assigned_agent_id, ai_urgency_score, is_auto_resolved)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING *`,
-        [
-          data.title,
-          data.description,
-          data.category_id || 'General IT Support',
-          data.priority || 'MEDIUM',
-          data.creator_id || null,
-          data.assigned_agent_id || null,
-          data.ai_urgency_score || 0,
-          data.is_auto_resolved || false,
-        ]
-      );
-      return res.rows[0];
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const ticket = await prisma.ticket.create({
+        data: {
+          title: data.title,
+          description: data.description,
+          category_id: data.category_id || 'General IT Support',
+          priority: (data.priority as any) || 'MEDIUM',
+          creator_id: data.creator_id || undefined,
+          assigned_agent_id: data.assigned_agent_id || undefined,
+          ai_urgency_score: data.ai_urgency_score || 0,
+          is_auto_resolved: data.is_auto_resolved || false,
+        },
+      });
+      return ticket as any;
     }
 
     ticketCounter++;
@@ -81,21 +78,18 @@ export class TicketModel {
   }
 
   static async findAll(filters: { status?: string; priority?: string; category_id?: string } = {}): Promise<TicketRecord[]> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      let query = 'SELECT * FROM tickets WHERE 1=1';
-      const params: any[] = [];
-      if (filters.status) {
-        params.push(filters.status);
-        query += ` AND status = $${params.length}`;
-      }
-      if (filters.priority) {
-        params.push(filters.priority);
-        query += ` AND priority = $${params.length}`;
-      }
-      query += ' ORDER BY created_at DESC';
-      const res = await dbPool.query(query, params);
-      return res.rows;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const where: any = {};
+      if (filters.status) where.status = filters.status;
+      if (filters.priority) where.priority = filters.priority;
+      if (filters.category_id) where.category_id = filters.category_id;
+
+      const tickets = await prisma.ticket.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+      });
+      return tickets as any;
     }
 
     return fallbackTickets.filter((t) => {
@@ -106,29 +100,24 @@ export class TicketModel {
   }
 
   static async findById(id: string): Promise<TicketRecord | null> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM tickets WHERE id = $1 LIMIT 1', [id]);
-      return res.rows[0] || null;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const ticket = await prisma.ticket.findUnique({
+        where: { id },
+      });
+      return ticket as any;
     }
     return fallbackTickets.find((t) => t.id === id) || null;
   }
 
   static async update(id: string, updates: Partial<TicketRecord>): Promise<TicketRecord | null> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const fields: string[] = [];
-      const values: any[] = [id];
-      Object.entries(updates).forEach(([key, val]) => {
-        if (val !== undefined) {
-          values.push(val);
-          fields.push(`${key} = $${values.length}`);
-        }
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const ticket = await prisma.ticket.update({
+        where: { id },
+        data: updates as any,
       });
-      if (fields.length === 0) return this.findById(id);
-      const query = `UPDATE tickets SET ${fields.join(', ')} WHERE id = $1 RETURNING *`;
-      const res = await dbPool.query(query, values);
-      return res.rows[0] || null;
+      return ticket as any;
     }
 
     const ticketIndex = fallbackTickets.findIndex((t) => t.id === id);
@@ -144,21 +133,18 @@ export class TicketModel {
     is_internal_note?: boolean;
     is_ai_generated?: boolean;
   }): Promise<TicketCommentRecord> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query(
-        `INSERT INTO ticket_comments (ticket_id, author_id, content, is_internal_note, is_ai_generated)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
-        [
-          data.ticket_id,
-          data.author_id || null,
-          data.content,
-          data.is_internal_note || false,
-          data.is_ai_generated || false,
-        ]
-      );
-      return res.rows[0];
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const comment = await prisma.ticketComment.create({
+        data: {
+          ticket_id: data.ticket_id,
+          author_id: data.author_id || undefined,
+          content: data.content,
+          is_internal_note: data.is_internal_note || false,
+          is_ai_generated: data.is_ai_generated || false,
+        },
+      });
+      return comment as any;
     }
 
     const newComment: TicketCommentRecord = {
@@ -175,13 +161,13 @@ export class TicketModel {
   }
 
   static async getComments(ticket_id: string): Promise<TicketCommentRecord[]> {
-    const isDbConnected = await checkDbConnection();
-    if (isDbConnected) {
-      const res = await dbPool.query(
-        'SELECT * FROM ticket_comments WHERE ticket_id = $1 ORDER BY created_at ASC',
-        [ticket_id]
-      );
-      return res.rows;
+    const isConnected = await checkDbConnection();
+    if (isConnected) {
+      const comments = await prisma.ticketComment.findMany({
+        where: { ticket_id },
+        orderBy: { created_at: 'asc' },
+      });
+      return comments as any;
     }
     return fallbackComments.filter((c) => c.ticket_id === ticket_id);
   }
