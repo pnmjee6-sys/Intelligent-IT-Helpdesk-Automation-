@@ -1,0 +1,6 @@
+{
+  "name": "Intelligent IT Helpdesk Architecture",
+  "description": "System Design Blueprint & Interactive Architecture Platform for Intelligent IT Helpdesk Automation",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
